@@ -4,6 +4,7 @@
 [![WSL2](https://img.shields.io/badge/WSL2-Supported-0078D4?style=flat-square&logo=windows&logoColor=white)](https://learn.microsoft.com/windows/wsl/)
 [![NVIDIA CUDA](https://img.shields.io/badge/NVIDIA-CUDA-76B900?style=flat-square&logo=nvidia&logoColor=white)](https://developer.nvidia.com/cuda-toolkit)
 [![AMD ROCm](https://img.shields.io/badge/AMD-ROCm-ED1C24?style=flat-square&logo=amd&logoColor=white)](https://rocm.docs.amd.com/)
+[![Intel XPU](https://img.shields.io/badge/Intel-XPU-0071C5?style=flat-square&logo=intel&logoColor=white)](https://github.com/intel/torch-xpu-ops)
 [![PyTorch](https://img.shields.io/badge/PyTorch-Latest-EE4C2C?style=flat-square&logo=pytorch&logoColor=white)](https://pytorch.org/)
 [![ComfyUI](https://img.shields.io/badge/ComfyUI-Latest-blueviolet?style=flat-square)](https://github.com/comfy-org/ComfyUI)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?style=flat-square&logo=gnubash&logoColor=white)](https://www.gnu.org/software/bash/)
@@ -11,24 +12,25 @@
 
 A smart, GPU-aware, **one-click Bash installer** for [ComfyUI](https://github.com/comfy-org/ComfyUI) on **native Ubuntu** and **Ubuntu running inside WSL2**.
 
-<img width="1590" height="764" alt="586807367-36e065e0-bfae-4456-8c7f-8369d5ea48a2" src="https://github.com/user-attachments/assets/833c72d8-402b-46ff-8950-c0bca93df58b" />
+<img width="1590" height="764" alt="ComfyUI Linux WSL2 installer preview" src="https://github.com/user-attachments/assets/833c72d8-402b-46ff-8950-c0bca93df58b" />
 
-This script automatically detects your platform, GPU vendor, Ubuntu version, and the correct PyTorch GPU wheel channel. It then installs or updates ComfyUI, creates a clean Python virtual environment, installs the matching CUDA or ROCm PyTorch build, and generates reusable launchers.
+This script automatically detects your platform, GPU vendor, Ubuntu version, and the correct PyTorch GPU wheel channel. It then installs or updates ComfyUI, creates a clean Python virtual environment, installs the matching **CUDA**, **ROCm**, or **XPU** PyTorch build, and generates reusable launchers.
 
-> **Goal:** one installer for every common Ubuntu ComfyUI setup: native NVIDIA, native AMD, WSL2 NVIDIA, and experimental WSL2 AMD.
+> **Goal:** one installer for every common Ubuntu ComfyUI setup: native NVIDIA, native AMD, native Intel, WSL2 NVIDIA, experimental WSL2 AMD, and experimental WSL2 Intel.
 
 ---
 
 ## ✨ Features
 
 *   **🌍 Universal Linux + WSL2 Installer:** One script supports native Ubuntu and Ubuntu on WSL2.
-*   **🧠 Smart GPU Detection:** Automatically detects **NVIDIA/CUDA** or **AMD/ROCm**.
+*   **🧠 Smart GPU Detection:** Automatically detects **NVIDIA/CUDA**, **AMD/ROCm**, or **Intel/XPU**.
 *   **🪟 WSL2-Aware Logic:** Detects WSL and changes GPU installation behavior to avoid breaking Windows-provided GPU passthrough.
 *   **🟩 NVIDIA CUDA Support:** Installs the CUDA repository/toolkit and uses the newest usable PyTorch CUDA wheel index.
 *   **🟥 AMD ROCm Support:** Installs ROCm packages for native Ubuntu and supports an experimental ROCm-on-WSL path.
+*   **🟦 Intel XPU Support:** Installs Intel GPU runtime packages and uses PyTorch XPU wheels for supported Intel GPUs.
 *   **🔥 Latest ComfyUI:** Clones or updates the official ComfyUI repository.
-*   **⚡ Latest PyTorch:** Dynamically checks available PyTorch wheel indexes and installs the latest matching GPU build.
-*   **🧪 GPU Verification:** Runs a PyTorch GPU test after installation and prints CUDA/HIP availability.
+*   **⚡ Latest PyTorch:** Dynamically installs the latest matching GPU build for CUDA, ROCm, or XPU.
+*   **🧪 GPU Verification:** Runs a PyTorch GPU test after installation and prints CUDA/HIP/XPU availability.
 *   **🚀 Launch Script Creator:** Creates `~/ComfyUI/run_comfyui.sh`, a `comfyui` terminal command, and a desktop entry.
 *   **🔁 Re-Run Safe:** Running the installer again updates an existing ComfyUI Git checkout and refreshes Python packages.
 *   **🧩 Override Friendly:** Advanced users can force platform/backend, skip OS GPU packages, change install path, change port, or use nightly PyTorch.
@@ -37,16 +39,18 @@ This script automatically detects your platform, GPU vendor, Ubuntu version, and
 
 ## ✅ Support Matrix
 
-| Platform | GPU | Status | Notes |
-|---|---:|---:|---|
-| **Native Ubuntu** | **NVIDIA** | ✅ Fully supported | Installs CUDA repo/toolkit and Ubuntu-recommended NVIDIA driver if needed. |
-| **Native Ubuntu** | **AMD** | ✅ Supported | Installs AMD ROCm packages and adds the user to `render,video`. |
-| **WSL2 Ubuntu** | **NVIDIA** | ✅ Fully supported | Uses Windows NVIDIA driver passthrough. Does **not** install Linux NVIDIA display drivers inside WSL. |
-| **WSL2 Ubuntu** | **AMD** | ⚠️ Experimental | Requires Windows-side AMD WSL driver support, Windows SDK, WSL2 GPU passthrough, ROCm userspace, and ROCDXG/librocdxg. |
+| Platform | GPU | Backend | Status | Notes |
+|---|---:|---:|---:|---|
+| **Native Ubuntu** | **NVIDIA** | CUDA | ✅ Fully supported | Installs CUDA repo/toolkit and Ubuntu-recommended NVIDIA driver if needed. |
+| **Native Ubuntu** | **AMD** | ROCm | ✅ Supported | Installs AMD ROCm packages and adds the user to `render,video`. |
+| **Native Ubuntu** | **Intel Arc / modern Intel GPU** | XPU | ✅ Supported | Installs Intel compute/runtime packages and PyTorch XPU wheels. |
+| **WSL2 Ubuntu** | **NVIDIA** | CUDA | ✅ Fully supported | Uses Windows NVIDIA driver passthrough. Does **not** install Linux NVIDIA display drivers inside WSL. |
+| **WSL2 Ubuntu** | **AMD** | ROCm | ⚠️ Experimental | Requires Windows-side AMD WSL driver support, Windows SDK, WSL2 GPU passthrough, ROCm userspace, and ROCDXG/librocdxg. |
+| **WSL2 Ubuntu** | **Intel Arc / modern Intel GPU** | XPU | ⚠️ Experimental | Depends on Windows/WSL GPU passthrough, Intel runtime availability, and PyTorch XPU support. |
 
 ### Automated GPU stack support
 
-The script automates CUDA/ROCm system package setup for:
+The script automates CUDA/ROCm/XPU system package setup for:
 
 ```text
 Ubuntu 22.04 LTS
@@ -251,16 +255,22 @@ Start
 │   └── WSL2 Ubuntu
 ├── Detect GPU backend
 │   ├── NVIDIA → CUDA
-│   └── AMD    → ROCm
+│   ├── AMD    → ROCm
+│   └── Intel  → XPU
 ├── Install base packages
 ├── Install system GPU packages unless INSTALL_SYSTEM_GPU=0
 │   ├── Native NVIDIA → CUDA repo + toolkit + optional Ubuntu driver
 │   ├── WSL2 NVIDIA   → CUDA WSL repo + toolkit only
 │   ├── Native AMD    → AMDGPU repo + amdgpu-dkms + ROCm
-│   └── WSL2 AMD      → ROCm userspace + ROCDXG/librocdxg
+│   ├── WSL2 AMD      → ROCm userspace + ROCDXG/librocdxg
+│   ├── Native Intel  → Intel compute/runtime packages + Level Zero/OpenCL tools
+│   └── WSL2 Intel    → Intel runtime path when available; experimental
 ├── Clone or update ComfyUI
 ├── Create Python venv
 ├── Install latest matching PyTorch
+│   ├── CUDA wheel index for NVIDIA
+│   ├── ROCm wheel index for AMD
+│   └── XPU wheel index for Intel
 ├── Install ComfyUI requirements
 ├── Create launchers
 └── Verify torch GPU access
@@ -277,6 +287,7 @@ Use environment variables before the script name to override behavior.
 ```bash
 COMFYUI_BACKEND=cuda ./install_comfyui_ubuntu_wsl.sh
 COMFYUI_BACKEND=rocm ./install_comfyui_ubuntu_wsl.sh
+COMFYUI_BACKEND=xpu ./install_comfyui_ubuntu_wsl.sh
 ```
 
 Supported values:
@@ -285,13 +296,15 @@ Supported values:
 auto
 cuda
 rocm
+xpu
 nvidia  # alias for cuda
 amd     # alias for rocm
+intel   # alias for xpu
 ```
 
 ### Skip system GPU package installation
 
-Use this if CUDA/ROCm is already installed or you only want the ComfyUI/PyTorch environment:
+Use this if CUDA/ROCm/XPU drivers are already installed or you only want the ComfyUI/PyTorch environment:
 
 ```bash
 INSTALL_SYSTEM_GPU=0 ./install_comfyui_ubuntu_wsl.sh
@@ -435,6 +448,57 @@ wsl --shutdown
 
 ---
 
+## 🟦 Intel Notes
+
+### Native Ubuntu Intel XPU
+
+ComfyUI supports Intel GPUs through native PyTorch `torch.xpu` support. This path is mainly intended for Intel Arc and modern Intel GPUs with a working Linux compute runtime.
+
+The script will:
+
+* detect Intel GPU hardware;
+* install Intel GPU compute/runtime packages where available;
+* install Level Zero/OpenCL diagnostic tools such as `clinfo`;
+* install PyTorch from the XPU wheel index;
+* verify `torch.xpu.is_available()` after installation.
+
+Run Intel manually with:
+
+```bash
+COMFYUI_BACKEND=xpu ./install_comfyui_ubuntu_wsl.sh
+```
+
+or:
+
+```bash
+COMFYUI_BACKEND=intel ./install_comfyui_ubuntu_wsl.sh
+```
+
+### WSL2 Intel XPU - Experimental
+
+Intel XPU inside WSL2 depends on Windows GPU driver support, WSL GPU passthrough behavior, Intel runtime availability inside Ubuntu, and the current PyTorch XPU wheel compatibility.
+
+If automatic detection fails but you want to try the Intel path:
+
+```bash
+COMFYUI_BACKEND=xpu ./install_comfyui_ubuntu_wsl.sh
+```
+
+If the installer completes but PyTorch cannot see the GPU, update WSL and restart it:
+
+```powershell
+wsl --update
+wsl --shutdown
+```
+
+Then reopen Ubuntu and test again:
+
+```bash
+comfyui
+```
+
+---
+
 ## 🧪 Verify the Install
 
 The installer runs a PyTorch verification step automatically. You can run it manually:
@@ -445,17 +509,33 @@ import torch
 print("torch:", torch.__version__)
 print("cuda:", torch.version.cuda)
 print("hip:", torch.version.hip)
-print("gpu available:", torch.cuda.is_available())
+print("cuda available:", torch.cuda.is_available())
 if torch.cuda.is_available():
-    print("device:", torch.cuda.get_device_name(0))
+    print("cuda device:", torch.cuda.get_device_name(0))
+
+xpu = getattr(torch, "xpu", None)
+if xpu is not None:
+    print("xpu available:", torch.xpu.is_available())
+    if torch.xpu.is_available():
+        print("xpu device:", torch.xpu.get_device_name(0))
+else:
+    print("xpu available: False")
 PY
 ```
 
 Expected result for GPU acceleration:
 
 ```text
-gpu available: True
+cuda available: True
 ```
+
+or:
+
+```text
+xpu available: True
+```
+
+For AMD ROCm, PyTorch usually reports the GPU through the CUDA-style API while `torch.version.hip` shows the ROCm/HIP build.
 
 ---
 
@@ -522,7 +602,7 @@ rm -f ~/.local/bin/comfyui
 rm -f ~/.local/share/applications/comfyui.desktop
 ```
 
-This does **not** remove system-level CUDA, ROCm, NVIDIA driver, or AMD driver packages.
+This does **not** remove system-level CUDA, ROCm, Intel GPU runtime packages, NVIDIA drivers, or AMD drivers.
 
 ---
 
@@ -571,7 +651,7 @@ Run it without `sudo`:
 
 The script will request sudo only for APT/system packages.
 
-### `No NVIDIA or AMD GPU detected`
+### `No NVIDIA, AMD, or Intel GPU detected`
 
 Force the backend:
 
@@ -585,18 +665,26 @@ or:
 COMFYUI_BACKEND=rocm ./install_comfyui_ubuntu_wsl.sh
 ```
 
+or:
+
+```bash
+COMFYUI_BACKEND=xpu ./install_comfyui_ubuntu_wsl.sh
+```
+
 ### `PyTorch installed, but GPU is not available`
 
 Common fixes:
 
 * **Native NVIDIA:** reboot after driver installation.
 * **Native AMD:** log out/in or reboot after group membership changes.
+* **Native Intel:** confirm Intel compute runtime installation and check `clinfo` or Level Zero tools.
 * **WSL2 NVIDIA:** update Windows NVIDIA driver, run `wsl --update`, then `wsl --shutdown`.
 * **WSL2 AMD:** confirm `/dev/dxg`, Windows SDK, AMD WSL driver support, and `librocdxg` installation.
+* **WSL2 Intel:** update WSL, restart WSL, and confirm the Windows Intel graphics driver supports the required compute path.
 
 ### Ubuntu version not supported for GPU stack setup
 
-Automated CUDA/ROCm system package setup targets Ubuntu 22.04 and 24.04. If you already installed CUDA or ROCm manually:
+Automated CUDA/ROCm/XPU system package setup targets Ubuntu 22.04 and 24.04. If you already installed CUDA, ROCm, or Intel GPU runtime packages manually:
 
 ```bash
 INSTALL_SYSTEM_GPU=0 ./install_comfyui_ubuntu_wsl.sh
@@ -617,8 +705,11 @@ Understanding the pieces can be confusing. This installer connects several proje
 * 🟥 **[AMD ROCm]**<br>
   The GPU compute stack used for AMD acceleration on native Ubuntu and, experimentally, WSL2.
 
+* 🟦 **[Intel XPU]**<br>
+  The PyTorch backend used for supported Intel GPUs through `torch.xpu` acceleration.
+
 * 🟠 **[PyTorch]**<br>
-  The machine learning framework used by ComfyUI. This installer selects a CUDA or ROCm wheel index automatically.
+  The machine learning framework used by ComfyUI. This installer selects a CUDA, ROCm, or XPU wheel index automatically.
 
 * 🔵 **[linux_comfyui]**<br>
   This one-click installer that brings the OS GPU runtime, PyTorch environment, ComfyUI checkout, and launch scripts together.
@@ -631,6 +722,7 @@ Understanding the pieces can be confusing. This installer connects several proje
 *   **PyTorch:** GPU-enabled Python packages by the [PyTorch team](https://pytorch.org/).
 *   **NVIDIA CUDA:** CUDA toolkit and WSL support by [NVIDIA](https://developer.nvidia.com/cuda-toolkit).
 *   **AMD ROCm:** ROCm Linux and WSL support by [AMD](https://rocm.docs.amd.com/).
+*   **Intel XPU / torch-xpu-ops:** Intel GPU support for PyTorch by [Intel](https://github.com/intel/torch-xpu-ops).
 *   **Ubuntu:** Linux distribution by [Canonical](https://ubuntu.com/).
 *   **WSL2:** Windows Subsystem for Linux by [Microsoft](https://learn.microsoft.com/windows/wsl/).
 *   **Bash:** Shell environment used to automate the installer.
@@ -639,7 +731,7 @@ Understanding the pieces can be confusing. This installer connects several proje
 
 ## ⚠️ Disclaimer
 
-This installer modifies system packages when `INSTALL_SYSTEM_GPU=1`. Review the script before running it, especially on production machines. GPU drivers, CUDA, ROCm, WSL, and PyTorch change frequently, so re-running the installer may pull newer packages than a previous install.
+This installer modifies system packages when `INSTALL_SYSTEM_GPU=1`. Review the script before running it, especially on production machines. GPU drivers, CUDA, ROCm, Intel runtime packages, WSL, and PyTorch change frequently, so re-running the installer may pull newer packages than a previous install.
 
 ---
 
