@@ -20,6 +20,44 @@ This script automatically detects your platform, GPU vendor, Ubuntu version, and
 
 ---
 
+## 🛠️ Installation Guide - Native Ubuntu
+
+1.  Download the installer:
+
+    [![Download Installer](https://img.shields.io/badge/⬇️%20Download%20Installer---?style=flat-square&logo=linux&logoColor=white)](./install_comfyui_ubuntu_wsl.sh)
+
+2.  Open a terminal in the folder where you downloaded the script.
+
+3.  Make it executable:
+
+    ```bash
+    chmod +x install_comfyui_ubuntu_wsl.sh
+    ```
+
+4.  Run it as your normal user:
+
+    ```bash
+    ./install_comfyui_ubuntu_wsl.sh
+    ```
+
+5.  Wait for the installer to finish.
+
+6.  Launch ComfyUI:
+
+    ```bash
+    comfyui
+    ```
+
+7.  Open the browser:
+
+    ```text
+    http://127.0.0.1:8188
+    ```
+
+> **Important:** Do not run the installer with `sudo`. The script asks for `sudo` only when it needs to install system packages.
+
+---
+
 ## ✨ Features
 
 *   **🌍 Universal Linux + WSL2 Installer:** One script supports native Ubuntu and Ubuntu on WSL2.
@@ -91,44 +129,6 @@ It also creates:
 ~/.local/bin/comfyui                         # Terminal shortcut
 ~/.local/share/applications/comfyui.desktop  # Linux desktop entry
 ```
-
----
-
-## 🛠️ Installation Guide - Native Ubuntu
-
-1.  Download the installer:
-
-    [![Download Installer](https://img.shields.io/badge/⬇️%20Download%20Installer---?style=flat-square&logo=linux&logoColor=white)](./install_comfyui_ubuntu_wsl.sh)
-
-2.  Open a terminal in the folder where you downloaded the script.
-
-3.  Make it executable:
-
-    ```bash
-    chmod +x install_comfyui_ubuntu_wsl.sh
-    ```
-
-4.  Run it as your normal user:
-
-    ```bash
-    ./install_comfyui_ubuntu_wsl.sh
-    ```
-
-5.  Wait for the installer to finish.
-
-6.  Launch ComfyUI:
-
-    ```bash
-    comfyui
-    ```
-
-7.  Open the browser:
-
-    ```text
-    http://127.0.0.1:8188
-    ```
-
-> **Important:** Do not run the installer with `sudo`. The script asks for `sudo` only when it needs to install system packages.
 
 ---
 
