@@ -22,9 +22,21 @@ This script automatically detects your platform, GPU vendor, Ubuntu version, and
 
 ## 🛠️ Installation Guide - Native Ubuntu
 
+### Option A - One-command install
+
+Open a terminal and run this single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Merserk/comfyui-ubuntu-universal-installer/main/install_comfyui_ubuntu_wsl.sh -o install_comfyui_ubuntu_wsl.sh && sed -i 's/\r$//' install_comfyui_ubuntu_wsl.sh && chmod +x install_comfyui_ubuntu_wsl.sh && ./install_comfyui_ubuntu_wsl.sh
+```
+
+This downloads the latest installer from the repository, fixes possible Windows line endings, makes it executable, and starts the install.
+
+### Option B - Download the installer
+
 1.  Download the installer:
 
-    [![Download Installer](https://img.shields.io/badge/⬇️%20Download%20Installer---?style=flat-square&logo=linux&logoColor=white)](./install_comfyui_ubuntu_wsl.sh)
+    [![Download Installer](https://img.shields.io/badge/⬇️%20Download%20Installer---?style=flat-square&logo=linux&logoColor=white)](https://github.com/Merserk/comfyui-ubuntu-universal-installer/blob/main/install_comfyui_ubuntu_wsl.sh)
 
 2.  Open a terminal in the folder where you downloaded the script.
 
