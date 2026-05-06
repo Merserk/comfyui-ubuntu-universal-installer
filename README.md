@@ -11,7 +11,7 @@
 
 A smart, GPU-aware, **one-click Bash installer** for [ComfyUI](https://github.com/comfy-org/ComfyUI) on **native Ubuntu** and **Ubuntu running inside WSL2**.
 
-<img width="1920" height="1080" alt="linux_comfyui installer preview" src="assets/linux_comfyui_preview.png" />
+<img width="1590" height="795" alt="image" src="https://github.com/user-attachments/assets/b28f7028-04e0-4ea1-92b2-0d7455b315bb" />
 
 This script automatically detects your platform, GPU vendor, Ubuntu version, and the correct PyTorch GPU wheel channel. It then installs or updates ComfyUI, creates a clean Python virtual environment, installs the matching CUDA or ROCm PyTorch build, and generates reusable launchers.
 
