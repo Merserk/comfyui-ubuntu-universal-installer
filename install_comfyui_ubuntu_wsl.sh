@@ -3,36 +3,37 @@
 #
 # Features:
 #   - Detects platform: native Ubuntu vs WSL2 Ubuntu
-#   - Detects GPU backend: NVIDIA/CUDA or AMD/ROCm
-#   - Uses the latest supported CUDA/ROCm package source for the detected Ubuntu mode
+#   - Detects GPU backend: NVIDIA/CUDA, AMD/ROCm, or Intel/XPU
+#   - Uses the latest supported CUDA/ROCm/PyTorch wheel path for the detected backend
 #   - Installs latest ComfyUI from https://github.com/comfy-org/ComfyUI
-#   - Installs latest matching PyTorch wheels from the newest usable PyTorch wheel index
+#   - Installs latest matching PyTorch wheels
 #   - Creates launchers: ~/ComfyUI/run_comfyui.sh and ~/.local/bin/comfyui
 #
 # Usage:
-#   chmod +x install_comfyui_ubuntu_wsl.sh
-#   ./install_comfyui_ubuntu_wsl.sh
+#   chmod +x install_comfyui_ubuntu.sh
+#   ./install_comfyui_ubuntu.sh
 #
 # Common overrides:
-#   COMFYUI_BACKEND=auto|cuda|rocm      # default: auto
-#   COMFYUI_DIR=$HOME/ComfyUI           # install/update directory
-#   COMFYUI_VENV=$COMFYUI_DIR/.venv     # virtualenv directory
-#   INSTALL_SYSTEM_GPU=1                # 1 = install CUDA/ROCm OS packages, 0 = skip OS GPU packages
-#   PYTORCH_CHANNEL=stable|nightly      # default: stable
-#   COMFYUI_HOST=127.0.0.1              # launch listen host; use 0.0.0.0 for LAN
-#   COMFYUI_PORT=8188                   # launch port
-#   SKIP_GPU_VERIFY=0                   # 1 = do not treat torch GPU check failure as fatal
-#   PYTHON_BIN=python3                  # Python interpreter used to create venv
+#   COMFYUI_BACKEND=auto|cuda|rocm|xpu   # default: auto; aliases: nvidia, amd, intel
+#   COMFYUI_DIR=$HOME/ComfyUI            # install/update directory
+#   COMFYUI_VENV=$COMFYUI_DIR/.venv      # virtualenv directory
+#   INSTALL_SYSTEM_GPU=1                 # 1 = install OS GPU packages, 0 = skip OS GPU packages
+#   PYTORCH_CHANNEL=stable|nightly       # default: stable
+#   COMFYUI_HOST=127.0.0.1               # launch listen host; use 0.0.0.0 for LAN
+#   COMFYUI_PORT=8188                    # launch port
+#   SKIP_GPU_VERIFY=0                    # 1 = do not treat torch GPU check failure as fatal
+#   PYTHON_BIN=python3                   # Python interpreter used to create venv
 #
 # WSL-specific overrides:
-#   WSL_SKIP_HOST_GPU_CHECK=0           # 1 = skip checks for Windows-side GPU exposure
-#   ROCDXG_AUTO_BUILD=1                 # 1 = build/install AMD ROCDXG on WSL ROCm
+#   WSL_SKIP_HOST_GPU_CHECK=0            # 1 = skip checks for Windows-side GPU exposure
+#   ROCDXG_AUTO_BUILD=1                  # 1 = build/install AMD ROCDXG on WSL ROCm
 #   WIN_SDK_INCLUDE=/mnt/c/.../Include/10.0.x.y
-#                                      # optional Windows SDK Include path for ROCDXG build
+#                                       # optional Windows SDK Include path for ROCDXG build
 #
 # Important WSL notes:
 #   - NVIDIA WSL2: install/update the NVIDIA Windows driver on Windows. This script does NOT install a Linux NVIDIA display driver in WSL.
 #   - AMD WSL2: install AMD Adrenalin for WSL2 and the Windows SDK on Windows before running this script. This script builds librocdxg when possible.
+#   - Intel WSL2: XPU support is experimental. Native Ubuntu is recommended for Intel Arc/Core Ultra GPUs.
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -86,7 +87,7 @@ is_wsl() {
 }
 
 is_wsl2_gpu_node_present() {
-  [[ -e /dev/dxg || -e /usr/lib/wsl/lib/libcuda.so || -e /usr/lib/wsl/lib/libcuda.so.1 ]]
+  [[ -e /dev/dxg || -d /dev/dri || -e /usr/lib/wsl/lib/libcuda.so || -e /usr/lib/wsl/lib/libcuda.so.1 ]]
 }
 
 require_ubuntu() {
@@ -163,12 +164,17 @@ native_gpu_lines() {
   lspci -nn 2>/dev/null | grep -Ei 'VGA|3D|Display' || true
 }
 
+is_intel_gpu_text() {
+  grep -Eiq 'Intel|Arc|Iris|Xe|UHD Graphics|Battlemage|Alchemist|Lunar Lake|Meteor Lake|Arrow Lake' <<<"${1:-}"
+}
+
 detect_backend() {
   case "$COMFYUI_BACKEND" in
     cuda|nvidia) printf 'cuda\n'; return ;;
     rocm|amd)    printf 'rocm\n'; return ;;
+    xpu|intel)   printf 'xpu\n'; return ;;
     auto) ;;
-    *) die "COMFYUI_BACKEND must be auto, cuda, or rocm." ;;
+    *) die "COMFYUI_BACKEND must be auto, cuda, rocm, or xpu. Aliases: nvidia, amd, intel." ;;
   esac
 
   local gpu_lines win_gpus
@@ -187,24 +193,32 @@ detect_backend() {
       printf 'rocm\n'
       return
     fi
+    if is_intel_gpu_text "$win_gpus"; then
+      printf 'xpu\n'
+      return
+    fi
 
     gpu_lines="$(native_gpu_lines)"
     if grep -Eiq 'NVIDIA' <<<"$gpu_lines"; then
       printf 'cuda\n'
     elif grep -Eiq 'Advanced Micro Devices|AMD|Radeon|ATI' <<<"$gpu_lines"; then
       printf 'rocm\n'
+    elif is_intel_gpu_text "$gpu_lines"; then
+      printf 'xpu\n'
     else
-      die "Could not auto-detect NVIDIA or AMD GPU in WSL. Set COMFYUI_BACKEND=cuda or COMFYUI_BACKEND=rocm. Windows GPU names seen: ${win_gpus:-none}. lspci GPU lines: ${gpu_lines:-none}."
+      die "Could not auto-detect NVIDIA, AMD, or Intel GPU in WSL. Set COMFYUI_BACKEND=cuda, COMFYUI_BACKEND=rocm, or COMFYUI_BACKEND=xpu. Windows GPU names seen: ${win_gpus:-none}. lspci GPU lines: ${gpu_lines:-none}."
     fi
   else
     gpu_lines="$(native_gpu_lines)"
-    [[ -n "$gpu_lines" ]] || die "No GPU found in lspci output. Install pciutils or set COMFYUI_BACKEND=cuda/rocm manually."
+    [[ -n "$gpu_lines" ]] || die "No GPU found in lspci output. Install pciutils or set COMFYUI_BACKEND=cuda/rocm/xpu manually."
     if grep -Eiq 'NVIDIA' <<<"$gpu_lines"; then
       printf 'cuda\n'
     elif grep -Eiq 'Advanced Micro Devices|AMD|Radeon|ATI' <<<"$gpu_lines"; then
       printf 'rocm\n'
+    elif is_intel_gpu_text "$gpu_lines"; then
+      printf 'xpu\n'
     else
-      die "No NVIDIA or AMD GPU detected. GPU lines: $gpu_lines"
+      die "No NVIDIA, AMD, or Intel GPU detected. GPU lines: $gpu_lines"
     fi
   fi
 }
@@ -212,7 +226,7 @@ detect_backend() {
 install_base_packages() {
   log "Installing base packages"
   apt_install \
-    ca-certificates curl wget gnupg lsb-release pciutils git \
+    ca-certificates curl wget gnupg gpg-agent lsb-release pciutils git \
     python3 python3-venv python3-pip python3-dev \
     build-essential pkg-config ffmpeg libgl1 libglib2.0-0 \
     software-properties-common cmake
@@ -323,7 +337,7 @@ install_amd_rocm_stack_native() {
     warn "Could not install linux headers/modules for this kernel. Continuing; amdgpu-dkms may still work if already available."
   $SUDO apt-get install -y --no-install-recommends amdgpu-dkms
   $SUDO apt-get install -y --no-install-recommends python3-setuptools python3-wheel rocm
-  $SUDO usermod -aG render,video "$USER"
+  add_user_to_gpu_groups
 
   write_rocm_profile native
 }
@@ -403,6 +417,81 @@ PROFILE
   fi
 }
 
+add_user_to_gpu_groups() {
+  if getent group render >/dev/null 2>&1; then
+    $SUDO usermod -aG render "$USER" || warn "Could not add $USER to render group."
+  fi
+  if getent group video >/dev/null 2>&1; then
+    $SUDO usermod -aG video "$USER" || warn "Could not add $USER to video group."
+  fi
+}
+
+configure_intel_oneapi_apt_repo() {
+  log "Configuring Intel oneAPI APT repository"
+  apt_install gpg-agent wget gnupg
+  wget -qO- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB | \
+    $SUDO gpg --yes --dearmor -o /usr/share/keyrings/oneapi-archive-keyring.gpg
+  echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | \
+    $SUDO tee /etc/apt/sources.list.d/oneAPI.list >/dev/null
+  APT_UPDATED=0
+  apt_update_once
+}
+
+configure_intel_client_gpu_repo() {
+  require_amd64
+  case "$UBUNTU_VERSION_ID" in
+    24.04|24.10|25.10)
+      log "Configuring Intel graphics PPA for Ubuntu ${UBUNTU_VERSION_ID}"
+      apt_install software-properties-common
+      $SUDO add-apt-repository -y ppa:kobuk-team/intel-graphics
+      APT_UPDATED=0
+      apt_update_once
+      ;;
+    22.04)
+      log "Configuring Intel graphics repository for Ubuntu 22.04 Jammy"
+      apt_install wget gnupg
+      wget -qO - https://repositories.intel.com/gpu/intel-graphics.key | \
+        $SUDO gpg --yes --dearmor --output /usr/share/keyrings/intel-graphics.gpg
+      echo "deb [arch=amd64,i386 signed-by=/usr/share/keyrings/intel-graphics.gpg] https://repositories.intel.com/gpu/ubuntu jammy unified" | \
+        $SUDO tee /etc/apt/sources.list.d/intel-gpu-jammy.list >/dev/null
+      APT_UPDATED=0
+      apt_update_once
+      ;;
+    *)
+      die "Intel GPU driver automation is supported by this script for Ubuntu 22.04, 24.04, 24.10, and 25.10. Detected Ubuntu ${UBUNTU_VERSION_ID}. Set INSTALL_SYSTEM_GPU=0 if your Intel GPU driver/Level Zero stack is already installed."
+      ;;
+  esac
+}
+
+install_intel_xpu_stack_native() {
+  require_amd64
+  configure_intel_client_gpu_repo
+
+  log "Installing Intel GPU compute packages for PyTorch XPU"
+  $SUDO apt-get install -y --no-install-recommends \
+    libze-intel-gpu1 libze1 intel-opencl-icd clinfo libze-dev intel-ocloc
+
+  # Helpful on newer Ubuntu/PPA packages. Keep optional because package names vary by Ubuntu release.
+  $SUDO apt-get install -y --no-install-recommends intel-metrics-discovery intel-gsc 2>/dev/null || \
+    warn "Optional Intel packages intel-metrics-discovery/intel-gsc were not available. Continuing."
+
+  add_user_to_gpu_groups
+}
+
+install_intel_xpu_stack_wsl() {
+  require_amd64
+  warn "Intel XPU under WSL2 is experimental. Native Ubuntu is recommended for Intel Arc/Core Ultra GPUs."
+  warn "WSL mode: not installing native Intel Linux display drivers. Make sure Windows has a current Intel graphics driver and WSL2 GPU passthrough is working."
+
+  apt_update_once
+  $SUDO apt-get install -y --no-install-recommends clinfo libze1 2>/dev/null || \
+    warn "Could not install basic Level Zero/OpenCL tools from Ubuntu repositories. Continuing with PyTorch XPU wheel install."
+
+  if [[ ! -e /dev/dxg && ! -d /dev/dri ]]; then
+    warn "No /dev/dxg or /dev/dri node was found. Intel GPU acceleration in WSL will probably fail until WSL GPU passthrough is available."
+  fi
+}
+
 make_venv() {
   log "Creating/updating Python virtual environment at ${VENV_DIR}"
   command -v "$PYTHON_BIN" >/dev/null 2>&1 || die "${PYTHON_BIN} not found. Set PYTHON_BIN=/path/to/python3 if needed."
@@ -418,7 +507,7 @@ fetch_pytorch_candidates() {
   if [[ -n "$html" ]]; then
     if [[ "$backend" == "cuda" ]]; then
       grep -oE 'href="cu[0-9]+/' <<<"$html" | sed -E 's/href="//; s#/##' | sort -Vr
-    else
+    elif [[ "$backend" == "rocm" ]]; then
       grep -oE 'href="rocm[0-9]+(\.[0-9]+)?/' <<<"$html" | sed -E 's/href="//; s#/##' | sort -Vr
     fi
   fi
@@ -426,7 +515,7 @@ fetch_pytorch_candidates() {
   # Known-good fallbacks. The dynamic discovery above is preferred.
   if [[ "$backend" == "cuda" ]]; then
     printf '%s\n' cu130 cu128 cu126 cu121 cu118
-  else
+  elif [[ "$backend" == "rocm" ]]; then
     printf '%s\n' rocm7.2 rocm7.1 rocm7.0 rocm6.4 rocm6.3 rocm6.2.4 rocm6.2 rocm6.1 rocm6.0
   fi
 }
@@ -435,6 +524,27 @@ select_pytorch_index() {
   local backend tag url checked
   backend="$1"
   checked=""
+
+  if [[ "$backend" == "xpu" ]]; then
+    if [[ "$PYTORCH_CHANNEL" == "nightly" ]]; then
+      url="https://download.pytorch.org/whl/nightly/xpu"
+      checked=" ${url}"
+      if "$VENV_DIR/bin/python" -m pip index versions torch --pre --index-url "$url" >/dev/null 2>&1; then
+        printf '%s\n' "$url"
+        return
+      fi
+    elif [[ "$PYTORCH_CHANNEL" == "stable" ]]; then
+      url="https://download.pytorch.org/whl/xpu"
+      checked=" ${url}"
+      if "$VENV_DIR/bin/python" -m pip index versions torch --index-url "$url" >/dev/null 2>&1; then
+        printf '%s\n' "$url"
+        return
+      fi
+    else
+      die "PYTORCH_CHANNEL must be stable or nightly."
+    fi
+    die "Could not find a usable PyTorch XPU wheel index. Checked:${checked}"
+  fi
 
   if [[ "$PYTORCH_CHANNEL" == "nightly" ]]; then
     for tag in $(fetch_pytorch_candidates "$backend" | awk '!seen[$0]++'); do
@@ -562,6 +672,33 @@ verify_torch() {
     export PATH="/usr/lib/wsl/lib:$PATH"
   fi
 
+  if [[ "$backend" == "xpu" ]]; then
+    if "$VENV_DIR/bin/python" - <<'PY'
+import sys
+import torch
+print(f"torch: {torch.__version__}")
+print(f"has torch.xpu: {hasattr(torch, 'xpu')}")
+if not hasattr(torch, "xpu"):
+    sys.exit(2)
+print(f"torch.xpu.is_available(): {torch.xpu.is_available()}")
+if torch.xpu.is_available():
+    print(f"device count: {torch.xpu.device_count()}")
+    print(f"device 0: {torch.xpu.get_device_name(0)}")
+    sys.exit(0)
+sys.exit(2)
+PY
+    then
+      log "PyTorch XPU verification succeeded"
+    else
+      if [[ "$SKIP_GPU_VERIFY" == "1" ]]; then
+        warn "PyTorch XPU verification failed, but SKIP_GPU_VERIFY=1 is set."
+      else
+        warn "PyTorch installed, but Intel XPU is not available to torch yet. See the notes below, then rerun: $COMFYUI_DIR/run_comfyui.sh"
+      fi
+    fi
+    return
+  fi
+
   if "$VENV_DIR/bin/python" - <<'PY'
 import sys
 import torch
@@ -624,6 +761,11 @@ EOF_CUDA_WSL
   - WSL AMD mode requires AMD Adrenalin for WSL2 on Windows, WSL2, the Windows SDK, ROCm user-space packages, and ROCDXG/librocdxg.
   - If torch cannot see ROCm, confirm /dev/dxg exists, HSA_ENABLE_DXG_DETECTION=1 is set, and librocdxg.so is installed under /opt/rocm/lib.
 EOF_ROCM_WSL
+  elif [[ "$PLATFORM" == "wsl" && "$BACKEND" == "xpu" ]]; then
+    cat <<'EOF_XPU_WSL'
+  - WSL Intel XPU mode is experimental. Native Ubuntu is recommended for Intel Arc/Core Ultra GPUs.
+  - If torch cannot see XPU, update the Intel Windows graphics driver, run 'wsl.exe --update', restart WSL with 'wsl.exe --shutdown', and verify that /dev/dxg or /dev/dri exists.
+EOF_XPU_WSL
   elif [[ "$PLATFORM" == "native" && "$BACKEND" == "cuda" ]]; then
     cat <<'EOF_CUDA_NATIVE'
   - If NVIDIA driver packages were just installed, reboot before launching if GPU verification failed.
@@ -632,6 +774,11 @@ EOF_CUDA_NATIVE
     cat <<'EOF_ROCM_NATIVE'
   - AMD users may need to log out and back in, or reboot, for render/video group membership to apply.
 EOF_ROCM_NATIVE
+  elif [[ "$PLATFORM" == "native" && "$BACKEND" == "xpu" ]]; then
+    cat <<'EOF_XPU_NATIVE'
+  - Intel users may need to log out and back in, or reboot, for render/video group membership to apply.
+  - If torch cannot see XPU, run: clinfo | grep "Device Name"
+EOF_XPU_NATIVE
   fi
 }
 
@@ -643,7 +790,7 @@ main() {
   log "Selected backend: ${BACKEND}"
 
   if [[ "$PLATFORM" == "wsl" && ! is_wsl2_gpu_node_present && "$WSL_SKIP_HOST_GPU_CHECK" != "1" ]]; then
-    warn "No /dev/dxg or WSL CUDA library was found. GPU acceleration in WSL requires WSL2 GPU passthrough. Continuing, but verification may fail."
+    warn "No /dev/dxg, /dev/dri, or WSL CUDA library was found. GPU acceleration in WSL requires WSL2 GPU passthrough. Continuing, but verification may fail."
   fi
 
   if [[ "$INSTALL_SYSTEM_GPU" == "1" ]]; then
@@ -655,6 +802,10 @@ main() {
       install_amd_rocm_stack_native
     elif [[ "$BACKEND" == "rocm" && "$PLATFORM" == "wsl" ]]; then
       install_amd_rocm_stack_wsl
+    elif [[ "$BACKEND" == "xpu" && "$PLATFORM" == "native" ]]; then
+      install_intel_xpu_stack_native
+    elif [[ "$BACKEND" == "xpu" && "$PLATFORM" == "wsl" ]]; then
+      install_intel_xpu_stack_wsl
     else
       die "Unsupported platform/backend combination: ${PLATFORM}/${BACKEND}"
     fi
